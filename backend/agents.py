@@ -46,7 +46,6 @@ def get_stellar_parameters(star_id: str, lc: lk.LightCurve) -> Dict[str, Any]:
     }
     
     try:
-        # --- NEW: Correctly calling catalog_info as per documentation ---
         is_tic = "tic" in star_id.lower() or (lc.meta.get('MISSION') == 'TESS')
         is_kic = "kic" in star_id.lower()
         
@@ -65,7 +64,7 @@ def get_stellar_parameters(star_id: str, lc: lk.LightCurve) -> Dict[str, Any]:
                 print(f"Querying Kepler Input Catalog (KIC) for ID: {clean_id}...")
                 ab, M_star, M_star_min, M_star_max, R_star, R_star_min, R_star_max = catalog_info(KIC_ID=clean_id)
             
-            # --- FIXED: Convert all numpy types to native Python floats ---
+            # --- Convert all numpy types to native Python floats ---
             params.update({
                 "limb_dark": tuple(map(float, ab)) if ab is not None else None,
                 "stellar_radius": float(R_star) if R_star is not None else None,
@@ -117,21 +116,16 @@ def calculate_planetary_parameters(tls_results, stellar_params: Dict[str, Any]) 
     """
     params = {}
     try:
-        # 1. Planet Radius (un-changed, this is the most direct measurement)
+        # 1. Planet Radius 
         r_star_in_r_earth = (stellar_params["stellar_radius"] * u.R_sun).to(u.R_earth).value
         params['planetary_radius_earth'] = float(r_star_in_r_earth * np.sqrt(tls_results.depth))
 
-        # --- IMPROVED: Use the semi-major axis from the TLS fit (`a_rs`) ---
-        # This value is internally consistent with the transit shape (duration, period, impact)
-        # and is often more reliable than recalculating from a potentially uncertain stellar mass.
-        
         # 2. Semi-Major Axis (in AU)
         # a = R_star * a_rs
         r_star_in_au = (stellar_params["stellar_radius"] * u.R_sun).to(u.au).value
         params['semi_major_axis_au'] = float(r_star_in_au * tls_results.a_rs)
 
         # 3. Equilibrium Temperature (in K)
-        # This formula is more direct and less sensitive to mass uncertainty
         # T_eq = T_star * sqrt(1 / (2 * a_rs))
         T_star_k = stellar_params["stellar_teff"]
         prelim_eq_temp = T_star_k * (1 - 0.1)**0.25 * np.sqrt(1 / (2 * tls_results.a_rs))
@@ -149,7 +143,6 @@ def calculate_planetary_parameters(tls_results, stellar_params: Dict[str, Any]) 
     return params
 
 def run_coordinator(scout_results: dict) -> dict:
-    """Uses the trained model to generate a classification and explanation."""
     if not COORDINATOR_MODEL:
         return {"prediction": "AI UNAVAILABLE", "confidence": 0, "explanation": "Coordinator model is not loaded."}
     
@@ -190,9 +183,6 @@ def run_scout_pipeline(
     n_transits_min: int,
     transit_depth_min: float
 ) -> List[Dict[str, Any]]:
-    """
-    Main analysis pipeline to find and vet transit signals from light curve data.
-    """
     print(f"--- Starting AURA Pipeline for {star_id} ---")
     
     # 1. Data Acquisition - Now focused on Kepler and TESS
@@ -214,7 +204,7 @@ def run_scout_pipeline(
         if not tpf_collection:
             raise ValueError(f"Could not download TESS Target Pixel Files for '{star_id}'.")
         
-        # --- FIXED: Apply PLD correction sector-by-sector and then stitch ---
+        # --- Apply PLD correction sector-by-sector and then stitch ---
         print("Applying TESS PLD systematics correction sector-by-sector...")
         corrected_lc_list = []
         for tpf in tpf_collection:
@@ -272,7 +262,7 @@ def run_scout_pipeline(
             break
 
         model = transitleastsquares(current_time, current_flux)
-        # --- UPDATED: Passing advanced parameters to the model ---
+        # --- Passing parameters to the model ---
         results = model.power(
             u=stellar_params["limb_dark"],
             limb_dark="quadratic", 
@@ -308,7 +298,6 @@ def run_scout_pipeline(
             print(f"TLS model depth: {results.depth:.6f}. Measured depth: {robust_depth:.6f}")
             results.depth = robust_depth
             
-            # --- NEW: Robust Duration Measurement ---
             in_transit_times = folded_time[in_transit_mask]
             # Duration in days, then convert to hours for reporting
             robust_duration_days = in_transit_times.max() - in_transit_times.min()
@@ -346,8 +335,11 @@ def run_scout_pipeline(
         current_time, current_flux = current_time[~in_transit_to_mask], current_flux[~in_transit_to_mask]
 
     # 9. Serialize and Return Results
-    if not all_found_signals: 
-        return []
+    if not all_found_signals:
+        return {
+            "light_curve": {"time": [], "flux": []},
+            "signals": []
+        }
 
     def _to_serializable(obj):
         if isinstance(obj, (np.generic, np.number)): 
@@ -358,7 +350,7 @@ def run_scout_pipeline(
              return [_to_serializable(x) for x in obj]
         return obj
 
-    # --- NEW: Downsample light curve for frontend plotting ---
+    # Downsample light curve 
     plot_time, plot_flux = time, flattened_flux
     if len(plot_time) > PLOT_DATA_MAX_POINTS:
         step = len(plot_time) // PLOT_DATA_MAX_POINTS

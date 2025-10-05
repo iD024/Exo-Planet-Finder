@@ -7,7 +7,6 @@ from typing import Dict, Any
 app = FastAPI(
     title="Project AURA API",
     description="Configurable API for the AURA Exoplanet Detection Pipeline",
-    version="4.0.0"
 )
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -25,10 +24,7 @@ async def analyze_star_id(
     transit_depth_min: float = Form(100.0),
     timeout_seconds: int = Form(600) 
 ):
-    """
-    Accepts a star ID and analysis parameters, runs the full AURA pipeline,
-    and returns the final analysis including the light curve and any found signals.
-    """
+    
     if not star_id:
         raise HTTPException(status_code=400, detail="Star ID cannot be empty.")
 

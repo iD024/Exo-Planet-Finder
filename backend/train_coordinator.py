@@ -13,9 +13,6 @@ MODEL_OUTPUT_DIR = 'models'
 MODEL_OUTPUT_PATH = os.path.join(MODEL_OUTPUT_DIR, 'coordinator_model.joblib')
 
 def load_and_prepare_koi_data(filepath: str) -> pd.DataFrame:
-    """
-    Loads Kepler Objects of Interest (KOI) data, cleans it, and prepares it for training.
-    """
     print(f"Loading KOI data from {filepath}...")
     try:
         koi_df = pd.read_csv(filepath, comment='#')
@@ -37,10 +34,6 @@ def load_and_prepare_koi_data(filepath: str) -> pd.DataFrame:
     return koi_df
 
 def load_and_prepare_toi_data(filepath: str) -> pd.DataFrame:
-    """
-    Loads TESS Objects of Interest (TOI) data, cleans it, and handles the potential
-    absence of an impact parameter column.
-    """
     print(f"Loading TOI data from {filepath}...")
     try:
         toi_df = pd.read_csv(filepath, comment='#')
@@ -72,9 +65,6 @@ def load_and_prepare_toi_data(filepath: str) -> pd.DataFrame:
     return toi_df
 
 def train_and_evaluate_model(df: pd.DataFrame):
-    """
-    Trains an XGBoostClassifier with hyperparameter tuning using GridSearchCV.
-    """
     print("\n--- Starting Advanced Model Training with Hyperparameter Tuning ---")
     
     feature_cols = ['period', 'duration', 'depth', 'stellar_teff', 'stellar_logg', 'impact']
@@ -115,7 +105,6 @@ def train_and_evaluate_model(df: pd.DataFrame):
     return best_model
 
 def save_model(model) -> None:
-    """Saves the trained model to the specified path."""
     print("\n--- Saving Model ---")
     try:
         os.makedirs(MODEL_OUTPUT_DIR, exist_ok=True)

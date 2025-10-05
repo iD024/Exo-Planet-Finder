@@ -34,15 +34,14 @@ def plot_full_lightcurve(lc_data, star_id):
 def plot_folded_lightcurve(lc_data, signal):
     """Generates an interactive plot of the folded light curve for a signal."""
     if 'T0' not in signal:
-        return None # Cannot plot without T0
+        return None 
         
-    # Phase-fold the light curve
     period = signal['period']
     t0 = signal['T0']
     df = pd.DataFrame(lc_data)
     df['phased_time_days'] = ((df['time'] - t0 + 0.5 * period) % period) - 0.5 * period
     
-    # Bin the data to see the average transit shape
+
     bins = np.linspace(-0.5 * period, 0.5 * period, 100)
     df['binned'] = pd.cut(df['phased_time_days'], bins=bins)
     binned_data = df.groupby('binned')['flux'].median().reset_index()
@@ -50,16 +49,16 @@ def plot_folded_lightcurve(lc_data, signal):
     
     fig = go.Figure()
     
-    # Plot raw phase-folded points
+
     fig.add_trace(go.Scatter(
-        x=df['phased_time_days'] * 24, # Convert to hours
+        x=df['phased_time_days'] * 24,
         y=df['flux'],
         mode='markers',
         marker=dict(size=2, color='grey', opacity=0.5),
         name='Folded Data'
     ))
 
-    # Plot binned median points
+
     fig.add_trace(go.Scatter(
         x=binned_data['mid_time'] * 24, # Convert to hours
         y=binned_data['flux'],
@@ -68,7 +67,6 @@ def plot_folded_lightcurve(lc_data, signal):
         name='Binned Median'
     ))
 
-    # Set plot range to +/- 3 transit durations for context
     plot_width_hours = signal.get('duration', 1) * 3
     fig.update_xaxes(range=[-plot_width_hours, plot_width_hours])
 
@@ -131,7 +129,6 @@ if analyze_button and star_id:
                 results_data = response.json()
                 st.header("Analysis Results")
                 
-                # --- NEW: Display Full Light Curve Plot ---
                 light_curve = results_data.get('light_curve')
                 if light_curve and light_curve.get('time'):
                     full_lc_fig = plot_full_lightcurve(light_curve, star_id)
@@ -144,7 +141,6 @@ if analyze_button and star_id:
                     for i, scout_res in enumerate(results_data['scout_results']):
                         st.subheader(f"Signal {i+1} (SDE: {scout_res.get('sde', 0):.2f})")
                         
-                        # --- NEW: Display Folded Light Curve Plot ---
                         folded_fig = plot_folded_lightcurve(light_curve, scout_res)
                         if folded_fig:
                             st.plotly_chart(folded_fig, use_container_width=True)
