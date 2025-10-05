@@ -25,7 +25,6 @@ except FileNotFoundError:
     COORDINATOR_MODEL = None
 
 def _validate_range(value: float, min_val: float, max_val: float) -> Tuple[float, float]:
-    """Helper to validate and correct min/max ranges, providing sensible defaults."""
     is_valid = lambda x: x is not None and not np.isnan(x)
     if not is_valid(min_val) or min_val > value: min_val = value * 0.9
     if not is_valid(max_val) or max_val < value: max_val = value * 1.1
@@ -34,10 +33,6 @@ def _validate_range(value: float, min_val: float, max_val: float) -> Tuple[float
 
 # --- HELPER FUNCTIONS FOR MODULARITY ---
 def get_stellar_parameters(star_id: str, lc: lk.LightCurve) -> Dict[str, Any]:
-    """
-    Retrieves high-quality stellar parameters, combining catalog data with light curve metadata.
-    It now fetches limb darkening coefficients and stellar parameter ranges.
-    """
     print("Attempting to retrieve stellar parameters...")
     params = {
         "limb_dark": None, "stellar_radius": None, "stellar_radius_min": None, "stellar_radius_max": None,
@@ -111,8 +106,8 @@ def prepare_light_curve(lc: lk.LightCurve, flatten_method: str, window_length: f
 
 def calculate_planetary_parameters(tls_results, stellar_params: Dict[str, Any]) -> Dict[str, float]:
     """
-    Calculates physically accurate planetary parameters using the transit fit's internally
-    consistent semi-major axis (`a_rs`) for more robust results.
+    Calculates physically accurate planetary parameters. The semi-major axis is derived
+    using Kepler's Third Law for robust results.
     """
     params = {}
     try:
@@ -120,20 +115,29 @@ def calculate_planetary_parameters(tls_results, stellar_params: Dict[str, Any]) 
         r_star_in_r_earth = (stellar_params["stellar_radius"] * u.R_sun).to(u.R_earth).value
         params['planetary_radius_earth'] = float(r_star_in_r_earth * np.sqrt(tls_results.depth))
 
-        # 2. Semi-Major Axis (in AU)
-        # a = R_star * a_rs
-        r_star_in_au = (stellar_params["stellar_radius"] * u.R_sun).to(u.au).value
-        params['semi_major_axis_au'] = float(r_star_in_au * tls_results.a_rs)
+        # --- FIX: Calculate Semi-Major Axis using Kepler's Third Law ---
+        # a^3 = (G * M * P^2) / (4 * pi^2)
+        M_star_kg = (stellar_params["stellar_mass"] * u.M_sun).to(u.kg)
+        period_sec = (tls_results.period * u.day).to(u.s)
+        
+        # Calculate semi-major axis in meters
+        semi_major_axis_m = ((const.G * M_star_kg * period_sec**2) / (4 * np.pi**2))**(1/3)
+        
+        # Convert to AU for reporting
+        params['semi_major_axis_au'] = semi_major_axis_m.to(u.au).value
 
         # 3. Equilibrium Temperature (in K)
-        # T_eq = T_star * sqrt(1 / (2 * a_rs))
+        # T_eq = T_star * sqrt(R_star / (2 * a))
         T_star_k = stellar_params["stellar_teff"]
-        prelim_eq_temp = T_star_k * (1 - 0.1)**0.25 * np.sqrt(1 / (2 * tls_results.a_rs))
+        R_star_m = (stellar_params["stellar_radius"] * u.R_sun).to(u.m)
+
+        # Use an adaptive albedo based on a preliminary temperature calculation
+        prelim_eq_temp = T_star_k * np.sqrt(R_star_m / (2 * semi_major_axis_m))
         
-        bond_albedo = 0.3 if prelim_eq_temp < 1000 else 0.1
+        bond_albedo = 0.3 if prelim_eq_temp.value < 1000 else 0.1 # Cooler planets are more reflective
         temp_factor = (1 - bond_albedo)**0.25
-        eq_temp = T_star_k * temp_factor * np.sqrt(1 / (2 * tls_results.a_rs))
-        params['equilibrium_temp_k'] = float(eq_temp)
+        eq_temp = T_star_k * temp_factor * np.sqrt(R_star_m / (2 * semi_major_axis_m))
+        params['equilibrium_temp_k'] = float(eq_temp.value)
 
     except Exception as e:
         print(f"Error calculating planetary parameters: {e}")
@@ -322,7 +326,6 @@ def run_scout_pipeline(
             "transit_count": results.transit_count,
             "distinct_transit_count": results.distinct_transit_count, 
             "empty_transit_count": results.empty_transit_count,
-            "impact": results.impact,
             **stellar_params
         }
         scout_results.update(calculate_planetary_parameters(results, stellar_params))

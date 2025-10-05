@@ -5,6 +5,7 @@ import requests
 import os
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 API_URL = "http://127.0.0.1:8000/analyze-star-id/"
 st.set_page_config(page_title="Project AURA", layout="wide")
@@ -33,32 +34,39 @@ def plot_full_lightcurve(lc_data, star_id):
 
 def plot_folded_lightcurve(lc_data, signal):
     """Generates an interactive plot of the folded light curve for a signal."""
-    if 'T0' not in signal:
-        return None 
+    # This check is important because T0 might not be in older versions of the API response
+    if 'T0' not in signal or signal['T0'] is None:
+        return None # Cannot plot without T0
         
+    # Phase-fold the light curve
     period = signal['period']
     t0 = signal['T0']
     df = pd.DataFrame(lc_data)
     df['phased_time_days'] = ((df['time'] - t0 + 0.5 * period) % period) - 0.5 * period
     
-
+    # Bin the data to see the average transit shape
     bins = np.linspace(-0.5 * period, 0.5 * period, 100)
-    df['binned'] = pd.cut(df['phased_time_days'], bins=bins)
+    df['binned'] = pd.cut(df['phased_time_days'], bins=bins, include_lowest=True)
     binned_data = df.groupby('binned')['flux'].median().reset_index()
-    binned_data['mid_time'] = binned_data['binned'].apply(lambda x: x.mid)
+    
+    # Calculate the midpoint of each bin for plotting
+    binned_data['mid_time'] = binned_data['binned'].apply(lambda x: x.mid if pd.notna(x) else np.nan)
+    
+    # --- FIX: Convert the categorical mid_time to a numeric type ---
+    binned_data['mid_time'] = pd.to_numeric(binned_data['mid_time'])
     
     fig = go.Figure()
     
-
+    # Plot raw phase-folded points
     fig.add_trace(go.Scatter(
-        x=df['phased_time_days'] * 24,
+        x=df['phased_time_days'] * 24, # Convert to hours
         y=df['flux'],
         mode='markers',
         marker=dict(size=2, color='grey', opacity=0.5),
         name='Folded Data'
     ))
 
-
+    # Plot binned median points
     fig.add_trace(go.Scatter(
         x=binned_data['mid_time'] * 24, # Convert to hours
         y=binned_data['flux'],
@@ -67,6 +75,7 @@ def plot_folded_lightcurve(lc_data, signal):
         name='Binned Median'
     ))
 
+    # Set plot range to +/- 3 transit durations for context
     plot_width_hours = signal.get('duration', 1) * 3
     fig.update_xaxes(range=[-plot_width_hours, plot_width_hours])
 
