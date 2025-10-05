@@ -1,0 +1,16 @@
+pandas
+lightgbm
+scikit-learn
+joblib
+fastapi
+uvicorn
+python-multipart
+streamlit
+scipy
+transitleastsquares
+plotly
+setuptools
+lightkurve
+wotan
+celery==5.3.6
+redis
