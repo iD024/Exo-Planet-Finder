@@ -92,23 +92,24 @@ def plot_folded_lightcurve(lc_data, signal):
 # --- UI Layout ---
 with st.sidebar:
     st.header("Target Input")
-    star_id = st.text_input("Enter a Star Name or ID", placeholder="e.g., Kepler-227")
+    star_id = st.text_input("Enter a Star Name or ID", placeholder="e.g., KIC10797460")
     
     st.header("Analysis Configuration")
-    download_all = st.checkbox("Download All Available Data (Slower)", value=True)
+    download_all = st.checkbox("Download All Available Data (Slower)", value=True, help="Downloads and stitches all available data quarters/sectors for the target. More data leads to better results but is much slower.")
     
-    timeout_seconds = st.number_input("Request Timeout (seconds)", min_value=30, value=600, step=30, help="Maximum time to wait for the analysis to complete.")
+    timeout_seconds = st.number_input("Request Timeout (seconds)", min_value=30, value=600, step=30, help="Maximum time to wait for the analysis to complete before timing out.")
+    
     with st.expander("Light Curve Flattening Settings"):
-        flatten_method = st.selectbox("Flattening Method", ['biweight', 'cosine', 'savgol', 'median'], index=0)
-        window_length = st.number_input("Window Length (days)", min_value=0.01, value=0.5, step=0.1)
+        flatten_method = st.selectbox("Flattening Method", ['biweight', 'cosine', 'savgol', 'median'], index=0, help="Algorithm to remove stellar variability (e.g., starspots) from the light curve.")
+        window_length = st.number_input("Window Length (days)", min_value=0.01, value=1.0, step=0.1, help="The size of the moving window for the flattening algorithm. Should be several times longer than the expected transit duration.")
 
     with st.expander("Advanced Transit Search Settings (TLS)"):
-        use_threads = st.slider("CPU Cores to Use", min_value=1, max_value=os.cpu_count(), value=os.cpu_count() - 1 if os.cpu_count() > 1 else 1)
-        period_max = st.number_input("Max Period to Search (days)", min_value=1.0, value=20.0, step=1.0)
-        oversampling_factor = st.number_input("Oversampling Factor", min_value=1, max_value=15, value=5)
-        duration_grid_step = st.number_input("Duration Grid Step", min_value=1.01, value=1.1, format="%.2f")
-        n_transits_min = st.number_input("Minimum Transits to Detect", min_value=2, value=2, step=1)
-        transit_depth_min = st.number_input("Minimum Transit Depth (ppm)", min_value=10.0, value=100.0, step=10.0, help="Set lower to find smaller planets, higher for noisy data.")
+        use_threads = st.slider("CPU Cores to Use", min_value=1, max_value=os.cpu_count(), value=os.cpu_count() - 1 if os.cpu_count() > 1 else 1, help="Number of CPU cores to use for the search. More cores are faster.")
+        period_max = st.number_input("Max Period to Search (days)", min_value=1.0, value=20.0, step=1.0, help="The longest orbital period to search for. Avoid setting this too high for short datasets.")
+        oversampling_factor = st.number_input("Oversampling Factor", min_value=1, max_value=15, value=5, help="How finely to sample the period grid. Higher values are more sensitive but slower. Recommended: 3-5.")
+        duration_grid_step = st.number_input("Duration Grid Step", min_value=1.01, value=1.1, format="%.2f", help="How finely to sample the transit durations. A value of 1.1 means each tested duration is 10% longer than the last.")
+        n_transits_min = st.number_input("Minimum Transits to Detect", min_value=2, value=2, step=1, help="The minimum number of transit events required to trigger a detection.")
+        transit_depth_min = st.number_input("Minimum Transit Depth (ppm)", min_value=10.0, value=200.0, step=10.0, help="The shallowest transit to search for. Set higher for noisy data to speed up the search.")
 
 
     analyze_button = st.button("Analyze for Planets", type="primary", use_container_width=True)
